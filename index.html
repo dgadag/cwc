@@ -44,46 +44,36 @@ Error generating stack: `+u.message+`
   
 
 
-<!-- Shopping Events Tracking - 統一歸類：立即搶購 + 前往賣貨便 = 同一轉換事件 -->
+
+<!-- 購物事件 - 僅 前往賣貨便下單 -->
 <script>
 (function(){
-  const PRODUCT = {
-    id: 'pet_cooling_mat_summer_2025',
-    name: '寵物涼感墊-雙耳冰墊',
-    price: 399,
-    currency: 'TWD'
-  };
-  
-  function fireUnified(source){
+  function fireCheckout(){
     var params = {
-      content_name: PRODUCT.name,
-      content_ids: [PRODUCT.id],
+      content_name: '寵物涼感墊-雙耳冰墊',
+      content_ids: ['pet_cooling_mat_summer_2025'],
       content_type: 'product',
-      value: PRODUCT.price,
-      currency: PRODUCT.currency,
-      button_source: source // 'header_quick' or 'main_checkout'
+      value: 399,
+      currency: 'TWD',
+      button_source: 'main_checkout'
     };
-    console.log('[統一購物事件] InitiateCheckout', params);
-    try{ if(window.fbq) fbq('track','InitiateCheckout', params); }catch(e){}
-    try{ if(window.fbq) fbq('trackCustom','SellerPageClick', params); }catch(e){} // 自訂事件，方便廣告後台篩選
-    try{ if(window.gtag) gtag('event','begin_checkout',{currency:params.currency,value:params.value,items:[{item_id:PRODUCT.id,item_name:PRODUCT.name}]}); }catch(e){}
-    try{ window.dataLayer=window.dataLayer||[]; dataLayer.push({event:'begin_checkout', button_source:source}); }catch(e){}
+    console.log('[購物事件] InitiateCheckout - 前往賣貨便下單', params);
+    try{ fbq('track','InitiateCheckout', params); }catch(e){}
   }
-
   document.addEventListener('click', function(e){
     var el = e.target.closest('a,button');
     if(!el) return;
     var txt = (el.innerText||el.textContent||'').trim();
-    if(txt.indexOf('立即搶購')>-1){
-      fireUnified('immediate_button_top');
-    } else if(txt.indexOf('前往 7-11賣貨便下單')>-1 || txt.indexOf('立即下單 - 賣貨便')>-1){
-      fireUnified('main_cta_bottom');
+    // 只追蹤 前往賣貨便
+    if(txt.indexOf('前往 7-11賣貨便下單')>-1 || txt.indexOf('立即下單 - 賣貨便')>-1){
+      fireCheckout();
     }
   }, true);
 })();
 </script>
-<!-- End Shopping Events -->
+<!-- End 購物事件 -->
 </body>
+
 
 
 </html>
