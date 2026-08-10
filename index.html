@@ -23,6 +23,57 @@ fbq('track', 'PageView');
 src="https://www.facebook.com/tr?id=1454082506476221&ev=PageView&noscript=1"
 /></noscript>
 <!-- End Meta Pixel Code -->
+
+<script>
+// ===== CAPI 雙追蹤 - 自動對接你剛建立的 API =====
+const CAPI_ENDPOINT = 'https://olr7svuoc2.execute-api.ap-southeast-2.amazonaws.com/events';
+function getFBCookie(name){ const r=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return r?r.pop():''; }
+async function sendCAPI(eventName, customData={}, eventId=null){
+  try{
+    const payload = {
+      event_name: eventName,
+      event_source_url: window.location.href,
+      custom_data: customData,
+      user_data: {
+        client_user_agent: navigator.userAgent,
+        fbp: getFBCookie('_fbp'),
+        fbc: getFBCookie('_fbc')
+      }
+    };
+    if(eventId) payload.event_id = eventId;
+    await fetch(CAPI_ENDPOINT, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    console.log('[CAPI] sent', eventName, customData);
+  }catch(e){ console.warn('[CAPI] error', e); }
+}
+// 包裝 fbq，自動雙發
+(function(){
+  if(!window.fbq) return;
+  const origFbq = window.fbq;
+  // 攔截之後的 fbq('track', ...)
+  window.fbq = function(){
+    try{ origFbq.apply(this, arguments); }catch(e){}
+    const args = Array.from(arguments);
+    if(args[0]==='track'){
+      const evName = args[1];
+      const custom = args[2]||{};
+      const opts = args[3]||{};
+      const eid = opts.eventID || null;
+      // 只對重要事件發 CAPI，避免過多
+      if(['ViewContent','AddToCart','InitiateCheckout','Purchase','Lead','CompleteRegistration','Search'].includes(evName)){
+        sendCAPI(evName, custom, eid);
+      }
+    }
+  };
+  // 保留 fbq 的屬性
+  Object.keys(origFbq).forEach(k=>{ window.fbq[k]=origFbq[k]; });
+  window.fbq.queue = origFbq.queue;
+})();
+// 頁面瀏覽後補一個 ViewContent CAPI (Pixel 已有 PageView)
+window.addEventListener('load', ()=>{
+  setTimeout(()=>{ sendCAPI('ViewContent', {content_name:'米米寵物床墊', value:399, currency:'TWD'}); }, 1500);
+});
+</script>
+
 </head>
 <body>
   <div id="root"></div>
