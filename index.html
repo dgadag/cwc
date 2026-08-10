@@ -25,8 +25,8 @@ src="https://www.facebook.com/tr?id=1454082506476221&ev=PageView&noscript=1"
 <!-- End Meta Pixel Code -->
 
 <script>
-// ===== CAPI v4 - CORS bypass with text/plain =====
-const CAPI_ENDPOINT = 'https://olr7svuoc2.execute-api.ap-southeast-2.amazonaws.com/events';
+// ===== CAPI v5 - fix 404 prod path =====
+const CAPI_ENDPOINT = 'https://olr7svuoc2.execute-api.ap-southeast-2.amazonaws.com/prod/events';
 function getCookie(name){ const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():''; }
 function getTestCode(){
   try{
@@ -42,16 +42,11 @@ function sendCAPI(eventName, customData={}, eventId=null){
     event_name: eventName,
     event_source_url: location.href,
     custom_data: customData,
-    user_data: {
-      client_user_agent: navigator.userAgent,
-      fbp: getCookie('_fbp'),
-      fbc: getCookie('_fbc')
-    }
+    user_data: { client_user_agent: navigator.userAgent, fbp: getCookie('_fbp'), fbc: getCookie('_fbc') }
   };
   if(testCode) payload.test_event_code = testCode;
   if(eventId) payload.event_id = eventId;
   const body = JSON.stringify(payload);
-  // 使用 text/plain 避免 CORS 預檢
   try{
     if(navigator.sendBeacon){
       const blob = new Blob([body], {type:'text/plain'});
@@ -59,33 +54,16 @@ function sendCAPI(eventName, customData={}, eventId=null){
     }
   }catch(e){}
   try{
-    fetch(CAPI_ENDPOINT, {method:'POST', body: body, headers:{'Content-Type':'text/plain'}, keepalive:true, mode:'cors'}).then(r=>r.text()).then(t=>console.log('[CAPI] fetch ok', eventName, t.slice(0,100))).catch(err=>console.warn('[CAPI] fetch err', err));
-  }catch(e){ console.warn('[CAPI] err', e); }
+    fetch(CAPI_ENDPOINT, {method:'POST', body: body, headers:{'Content-Type':'text/plain'}, keepalive:true, mode:'cors'}).then(r=>r.text()).then(t=>console.log('[CAPI] fetch ok', eventName, t.slice(0,200))).catch(err=>console.warn('[CAPI] fetch err', err));
+  }catch(e){}
 }
 (function(){
-  const orig = window.fbq;
-  if(!orig) return;
-  const wrapped = function(){
-    try{ orig.apply(this, arguments); }catch(e){}
-    const args = Array.from(arguments);
-    if(args[0]==='track'){
-      const name=args[1]; const data=args[2]||{}; const opts=args[3]||{};
-      if(['ViewContent','AddToCart','InitiateCheckout','Purchase','Lead'].includes(name)){
-        sendCAPI(name, data, opts.eventID||null);
-      }
-    }
-  };
-  Object.keys(orig).forEach(k=>{ wrapped[k]=orig[k]; });
-  wrapped.queue = orig.queue;
-  window.fbq = wrapped;
+  const orig = window.fbq; if(!orig) return;
+  const wrapped = function(){ try{ orig.apply(this, arguments); }catch(e){} const args=Array.from(arguments); if(args[0]==='track'){ const name=args[1]; const data=args[2]||{}; const opts=args[3]||{}; if(['ViewContent','AddToCart','InitiateCheckout','Purchase','Lead'].includes(name)){ sendCAPI(name, data, opts.eventID||null); } } };
+  Object.keys(orig).forEach(k=>{ wrapped[k]=orig[k]; }); wrapped.queue=orig.queue; window.fbq=wrapped;
 })();
 window.addEventListener('load', ()=>{ setTimeout(()=>{ sendCAPI('ViewContent', {content_name:'米米寵物床墊', value:399, currency:'TWD'}); }, 600); });
-document.addEventListener('click', function(e){
-  const btn = e.target.closest && e.target.closest('a[href*="myship.7-11.com.tw"]');
-  if(!btn) return;
-  sendCAPI('InitiateCheckout', {value:399, currency:'TWD'});
-  sendCAPI('Purchase', {value:399, currency:'TWD'});
-}, true);
+document.addEventListener('click', function(e){ const btn = e.target.closest && e.target.closest('a[href*="myship.7-11.com.tw"]'); if(!btn) return; sendCAPI('InitiateCheckout', {value:399, currency:'TWD'}); sendCAPI('Purchase', {value:399, currency:'TWD'}); }, true);
 </script>
 
 </head>
