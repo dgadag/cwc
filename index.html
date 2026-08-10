@@ -25,34 +25,19 @@ src="https://www.facebook.com/tr?id=1454082506476221&ev=PageView&noscript=1"
 <!-- End Meta Pixel Code -->
 
 <script>
-// ===== CAPI v3  robust - 解決跳轉丟失 + 自動測試碼 =====
+// ===== CAPI v4 - CORS bypass with text/plain =====
 const CAPI_ENDPOINT = 'https://olr7svuoc2.execute-api.ap-southeast-2.amazonaws.com/events';
 function getCookie(name){ const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():''; }
 function getTestCode(){
-  // 1. URL ?test_event_code=TEST38775
   try{
     const u = new URL(location.href);
-    let c = u.searchParams.get('test_event_code') || u.searchParams.get('test_code');
-    if(c) return c;
+    let c = u.searchParams.get('test_event_code');
+    if(c){ try{ sessionStorage.setItem('fb_test_event_code', c); }catch(e){} return c; }
   }catch(e){}
-  // 2. Facebook 測試工具存在 localStorage 的代碼
-  try{
-    // 嘗試從父頁面讀不到，但我們也讀 session
-    const stored = sessionStorage.getItem('fb_test_event_code') || localStorage.getItem('fb_test_event_code');
-    if(stored) return stored;
-  }catch(e){}
-  return null;
+  try{ return sessionStorage.getItem('fb_test_event_code'); }catch(e){ return null; }
 }
-function saveTestCodeIfPresent(){
-  const c = getTestCode();
-  if(c){
-    try{ sessionStorage.setItem('fb_test_event_code', c); localStorage.setItem('fb_test_event_code', c); }catch(e){}
-    return c;
-  }
-  try{ return sessionStorage.getItem('fb_test_event_code') || localStorage.getItem('fb_test_event_code'); }catch(e){ return null; }
-}
-async function sendCAPI(eventName, customData={}, eventId=null){
-  const testCode = saveTestCodeIfPresent();
+function sendCAPI(eventName, customData={}, eventId=null){
+  const testCode = getTestCode();
   const payload = {
     event_name: eventName,
     event_source_url: location.href,
@@ -66,21 +51,17 @@ async function sendCAPI(eventName, customData={}, eventId=null){
   if(testCode) payload.test_event_code = testCode;
   if(eventId) payload.event_id = eventId;
   const body = JSON.stringify(payload);
-  // 1. 優先用 sendBeacon (跳轉不丟失)
+  // 使用 text/plain 避免 CORS 預檢
   try{
     if(navigator.sendBeacon){
-      const blob = new Blob([body], {type:'application/json'});
-      const ok = navigator.sendBeacon(CAPI_ENDPOINT, blob);
-      if(ok){ console.log('[CAPI] beacon sent', eventName); return; }
+      const blob = new Blob([body], {type:'text/plain'});
+      if(navigator.sendBeacon(CAPI_ENDPOINT, blob)){ console.log('[CAPI] beacon sent', eventName, testCode||''); return; }
     }
   }catch(e){}
-  // 2. fetch keepalive
   try{
-    await fetch(CAPI_ENDPOINT, {method:'POST', headers:{'Content-Type':'application/json'}, body: body, keepalive:true, mode:'cors'});
-    console.log('[CAPI] fetch sent', eventName, testCode||'');
-  }catch(e){ console.warn('[CAPI] failed', e); }
+    fetch(CAPI_ENDPOINT, {method:'POST', body: body, headers:{'Content-Type':'text/plain'}, keepalive:true, mode:'cors'}).then(r=>r.text()).then(t=>console.log('[CAPI] fetch ok', eventName, t.slice(0,100))).catch(err=>console.warn('[CAPI] fetch err', err));
+  }catch(e){ console.warn('[CAPI] err', e); }
 }
-// 包裝 fbq 自動雙發
 (function(){
   const orig = window.fbq;
   if(!orig) return;
@@ -88,10 +69,8 @@ async function sendCAPI(eventName, customData={}, eventId=null){
     try{ orig.apply(this, arguments); }catch(e){}
     const args = Array.from(arguments);
     if(args[0]==='track'){
-      const name = args[1];
-      const data = args[2]||{};
-      const opts = args[3]||{};
-      if(['ViewContent','AddToCart','InitiateCheckout','Purchase','Lead','CompleteRegistration'].includes(name)){
+      const name=args[1]; const data=args[2]||{}; const opts=args[3]||{};
+      if(['ViewContent','AddToCart','InitiateCheckout','Purchase','Lead'].includes(name)){
         sendCAPI(name, data, opts.eventID||null);
       }
     }
@@ -100,17 +79,12 @@ async function sendCAPI(eventName, customData={}, eventId=null){
   wrapped.queue = orig.queue;
   window.fbq = wrapped;
 })();
-// 頁面 ViewContent
-window.addEventListener('load', ()=>{ setTimeout(()=>{ sendCAPI('ViewContent', {content_name:'米米寵物床墊', value:399, currency:'TWD'}); }, 800); });
-
-// 7-11 按鈕特別處理：先發再跳
+window.addEventListener('load', ()=>{ setTimeout(()=>{ sendCAPI('ViewContent', {content_name:'米米寵物床墊', value:399, currency:'TWD'}); }, 600); });
 document.addEventListener('click', function(e){
   const btn = e.target.closest && e.target.closest('a[href*="myship.7-11.com.tw"]');
   if(!btn) return;
-  // 發送
-  sendCAPI('InitiateCheckout', {value:399, currency:'TWD', content_name:'前往 7-11賣貨便下單'});
-  sendCAPI('Purchase', {value:399, currency:'TWD', content_name:'寵物床墊'});
-  // 不阻止跳轉，靠 beacon/keepalive 保證送達
+  sendCAPI('InitiateCheckout', {value:399, currency:'TWD'});
+  sendCAPI('Purchase', {value:399, currency:'TWD'});
 }, true);
 </script>
 
